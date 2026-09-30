@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for Multi-Tenant School Architecture
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return request.auth.token;
+    }
+
+    function isSameSchool(schoolId) {
+      return isAuthenticated() && (getUserData().schoolId == schoolId);
+    }
+
+    function isSchoolAdmin(schoolId) {
+      return isSameSchool(schoolId) && (getUserData().role == 'admin');
+    }
+
+    function isTeacher(schoolId) {
+      return isSameSchool(schoolId) && (getUserData().role == 'teacher');
+    }
+
+    function isDriver(schoolId) {
+      return isSameSchool(schoolId) && (getUserData().role == 'driver');
+    }
+
+    function isParent(schoolId) {
+      return isSameSchool(schoolId) && (getUserData().role == 'parent');
+    }
+
+    // Root collection: schools/{schoolId}
+    match /schools/{schoolId} {
+      // Public / authenticated basic school profile (logo, name, contact)
+      allow read: if isAuthenticated() && isSameSchool(schoolId);
+      allow write: if isSchoolAdmin(schoolId);
+
+      // Students Collection: Sensitive Child Privacy & Coordinates
+      match /students/{studentId} {
+        // Admin and teachers can read/write students in their school
+        allow read: if isSchoolAdmin(schoolId) || isTeacher(schoolId)
+                    // Parents can only read their OWN child's profile & coordinates!
+                    || (isParent(schoolId) && resource.data.parentId == request.auth.uid)
+                    // Drivers can only read students assigned to their bus/route without sensitive financial data
+                    || (isDriver(schoolId) && resource.data.busId == getUserData().assignedBusId);
+
+        allow write: if isSchoolAdmin(schoolId);
+        // Teacher can update attendance/transport status
+        allow update: if isTeacher(schoolId) || isSchoolAdmin(schoolId);
+      }
+
+      // Buses Collection
+      match /buses/{busId} {
+        allow read: if isSameSchool(schoolId);
+        allow write: if isSchoolAdmin(schoolId);
+      }
+
+      // Routes Collection
+      match /routes/{routeId} {
+        allow read: if isSameSchool(schoolId);
+        allow write: if isSchoolAdmin(schoolId);
+      }
+
+      // Trips & Live Geofencing Logs
+      match /trips/{tripId} {
+        allow read: if isSameSchool(schoolId);
+        allow write: if isDriver(schoolId) || isSchoolAdmin(schoolId);
+      }
+
+      // Attendance Records
+      match /attendance/{attendanceId} {
+        allow read: if isSchoolAdmin(schoolId) || isTeacher(schoolId)
+                    || (isParent(schoolId) && resource.data.studentId in getUserData().assignedStudentIds);
+        allow write: if isTeacher(schoolId) || isSchoolAdmin(schoolId);
+      }
+
+      // Fees & Invoices: Strict Privacy
+      match /fees/{feeId} {
+        allow read: if isSchoolAdmin(schoolId)
+                    || (isParent(schoolId) && resource.data.studentId in getUserData().assignedStudentIds);
+        allow write: if isSchoolAdmin(schoolId);
+        // Parent can update payment status upon gateway verification
+        allow update: if isParent(schoolId) && resource.data.studentId in getUserData().assignedStudentIds;
+      }
+
+      // Homework
+      match /homework/{hwId} {
+        allow read: if isSameSchool(schoolId);
+        allow write: if isTeacher(schoolId) || isSchoolAdmin(schoolId);
+      }
+
+      // Exams
+      match /exams/{examId} {
+        allow read: if isSameSchool(schoolId);
+        allow write: if isTeacher(schoolId) || isSchoolAdmin(schoolId);
+      }
+
+      // Notices
+      match /notices/{noticeId} {
+        allow read: if isSameSchool(schoolId);
+        allow write: if isSchoolAdmin(schoolId) || isTeacher(schoolId);
+      }
+
+      // Leave Requests
+      match /leaveRequests/{leaveId} {
+        allow read: if isSchoolAdmin(schoolId) || isTeacher(schoolId)
+                    || (isParent(schoolId) && resource.data.studentId in getUserData().assignedStudentIds)
+                    || isDriver(schoolId);
+        allow create: if isParent(schoolId);
+        allow update: if isSchoolAdmin(schoolId) || isTeacher(schoolId);
+      }
+
+      // Notifications
+      match /notifications/{notifId} {
+        allow read: if isSameSchool(schoolId) &&
+          (resource.data.targetRole == 'all' ||
+           resource.data.targetRole == getUserData().role ||
+           resource.data.targetUserId == request.auth.uid);
+        allow write: if isSameSchool(schoolId);
+      }
+    }
+
+    // High frequency Live GPS: liveTrips/{tripId}
+    match /liveTrips/{tripId} {
+      allow read: if isAuthenticated() && isSameSchool(resource.data.schoolId);
+      allow write: if isAuthenticated() && isSameSchool(resource.data.schoolId) && (getUserData().role == 'driver' || getUserData().role == 'admin');
+    }
+  }
+}

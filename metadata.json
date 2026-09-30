@@ -1,0 +1,6 @@
+{
+  "name": "SchoolSync - Smart School Transport & Student Safety Platform",
+  "description": "SchoolSync is a student safety, live school bus tracking, geofencing, parent communication, attendance, fees, and school management SaaS platform.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

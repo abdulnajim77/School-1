@@ -1,0 +1,22 @@
+{
+  "short_name": "SchoolSync",
+  "name": "SchoolSync - Smart School Transport & Student Safety",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#F6F8FC",
+  "theme_color": "#253B80",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/"
+}
